@@ -1,0 +1,9 @@
+*.env
+myvenv
+__pycache__
+/media
+staticfiles
+notes.txt
+venv
+plan.txt
+API.txt
