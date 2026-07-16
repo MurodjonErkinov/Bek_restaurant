@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'restaurant',
     'kpi',
+    'kassa',
 ]
 
 MIDDLEWARE = [
@@ -125,6 +126,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 STORAGES = {
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
