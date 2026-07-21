@@ -4,8 +4,18 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Category, Customer, Order, Product
-from .serializers import CategorySerializer, CustomerSerializer, OrderSerializer, ProductSerializer
+
+from kassa.notifications import send_checkout_notification
+
+from .models import Category, Customer, Order, Product, RestaurantTable, User
+from .serializers import (
+    CategorySerializer,
+    CustomerSerializer,
+    OrderSerializer,
+    ProductSerializer,
+    RestaurantTableSerializer,
+    WaiterSerializer,
+)
 
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -23,14 +33,51 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductSerializer
 
 
+class WaiterViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = User.objects.filter(role='afitsant', is_active=True).order_by('id')
+    serializer_class = WaiterSerializer
+
+
+class RestaurantTableViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = RestaurantTable.objects.filter(is_active=True).order_by('number')
+    serializer_class = RestaurantTableSerializer
+
+
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all()
+    queryset = (
+        Order.objects
+        .select_related('customer', 'waiter', 'table')
+        .prefetch_related('items__product')
+    )
     serializer_class = OrderSerializer
 
     @action(detail=True, methods=['post'], url_path='checkout')
     def checkout(self, request, pk=None):
         with transaction.atomic():
-            order = self.get_queryset().select_for_update().get(pk=pk)
+            # PostgreSQL nullable waiter/table LEFT JOIN larini FOR UPDATE bilan
+            # lock qila olmaydi. Faqat Order qatorini lock qilamiz.
+            order = Order.objects.select_for_update().get(pk=pk)
+            if order.status == 'closed':
+                return Response(
+                    {'detail': 'Bu buyurtma avval yopilgan.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not order.waiter_id:
+                return Response(
+                    {'detail': 'Buyurtmaga afitsant biriktirilmagan.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if order.waiter.role != 'afitsant':
+                return Response(
+                    {'detail': 'Buyurtmaga biriktirilgan foydalanuvchi afitsant emas.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if not order.table_id:
+                return Response(
+                    {'detail': 'Buyurtmaga stol biriktirilmagan.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             payment_type = request.data.get('payment_type', 'cash')
             try:
                 paid_amount = Decimal(str(request.data.get('paid_amount', '0')))
@@ -53,6 +100,11 @@ class OrderViewSet(viewsets.ModelViewSet):
             ])
 
             from kpi.models import WaiterKPI
-            WaiterKPI.create_for_order(order)
+            waiter_kpi = WaiterKPI.create_for_order(order)
 
-        return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
+        telegram_notification = send_checkout_notification(order)
+        response_data = OrderSerializer(order).data
+        from kpi.serializers import WaiterKPISerializer
+        response_data['waiter_kpi'] = WaiterKPISerializer(waiter_kpi).data
+        response_data['telegram_notification'] = telegram_notification
+        return Response(response_data, status=status.HTTP_200_OK)
