@@ -54,8 +54,6 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='checkout')
     def checkout(self, request, pk=None):
         with transaction.atomic():
-            # PostgreSQL nullable waiter/table LEFT JOIN larini FOR UPDATE bilan
-            # lock qila olmaydi. Faqat Order qatorini lock qilamiz.
             order = Order.objects.select_for_update().get(pk=pk)
             if order.status == 'closed':
                 return Response(

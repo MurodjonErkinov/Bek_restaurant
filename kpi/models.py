@@ -32,20 +32,6 @@ class WaiterKPI(models.Model):
     commission_amount = models.DecimalField(max_digits=12, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        verbose_name = 'Afitsant KPI'
-        verbose_name_plural = 'Afitsant KPI lari'
-        ordering = ['-business_date', '-id']
-        indexes = [
-            models.Index(
-                fields=['waiter', 'business_date'],
-                name='kpi_waiterk_waiter__92125c_idx',
-            ),
-            models.Index(
-                fields=['business_date', 'table'],
-                name='kpi_waiterk_busines_ba6dc1_idx',
-            ),
-        ]
 
     @classmethod
     def rates_for(cls, waiter, on_date):

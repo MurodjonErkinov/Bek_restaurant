@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 def send_checkout_notification(order):
-    """Telegram sozlanmagan bo‘lsa checkout jarayoniga xalaqit bermaydi."""
     if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_CHAT_IDS:
         return {
             'sent': 0,

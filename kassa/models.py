@@ -1,9 +1,7 @@
 from decimal import Decimal
-
 from django.conf import settings
 from django.db import models
 from django.db.models import Sum
-
 from restaurant.models import Order
 
 
@@ -67,20 +65,9 @@ class CashTransaction(models.Model):
     credit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     created_at = models.DateTimeField(auto_now_add=True)
 
-    @classmethod
-    def create_for_order(cls, session, order):
-        return cls.objects.create(
-            cash_session=session,
-            order=order,
-            order_total=order.total_price,
-            cash_amount=order.paid_amount,
-            credit_amount=order.debt_amount,
-        )
 
 class CashExpense(models.Model):
     cash_session = models.ForeignKey(CashSession, related_name='expenses', on_delete=models.PROTECT)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     description = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
-
-
