@@ -31,6 +31,11 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = env_bool('DEBUG')
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
+URL_PREFIX = os.getenv('URL_PREFIX', '').strip().rstrip('/')
+if URL_PREFIX and not URL_PREFIX.startswith('/'):
+    URL_PREFIX = f'/{URL_PREFIX}'
+if URL_PREFIX:
+    FORCE_SCRIPT_NAME = URL_PREFIX
 
 
 # Application definition
@@ -144,7 +149,7 @@ USE_I18N = True
 USE_TZ = True
 
 
-STATIC_URL = 'static/'
+STATIC_URL = f'{URL_PREFIX}/static/' if URL_PREFIX else '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 _telegram_chat_ids = os.getenv('TELEGRAM_CHAT_IDS', os.getenv('TELEGRAM_CHAT_ID', ''))
