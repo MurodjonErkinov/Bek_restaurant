@@ -6,12 +6,13 @@ from .models import Category, Customer, Order, OrderItem, Product, RestaurantTab
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'email', 'role', 'is_staff', 'is_active')
+    list_display = ('username', 'phone', 'role', 'salary', 'is_staff', 'is_active')
+    search_fields = ('username', 'phone', 'email')
     fieldsets = BaseUserAdmin.fieldsets + (
-        ('Additional info', {'fields': ('role', 'phone')}),
+        ('Additional info', {'fields': ('role', 'phone', 'salary')}),
     )
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        ('Additional info', {'fields': ('role', 'phone')}),
+        ('Additional info', {'fields': ('role', 'phone', 'salary')}),
     )
 
 

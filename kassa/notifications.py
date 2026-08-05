@@ -18,7 +18,11 @@ def send_checkout_notification(order):
         }
 
     table = f'Stol {order.table.number}' if order.table_id else 'Stolsiz'
-    waiter = order.waiter.username if order.waiter_id else 'Biriktirilmagan'
+    waiter = (
+        order.waiter.get_full_name() or order.waiter.phone
+        if order.waiter_id
+        else 'Biriktirilmagan'
+    )
     text = (
         f'✅ Buyurtma #{order.id} yopildi\n'
         f'{table}\n'

@@ -1,17 +1,35 @@
 from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
+from core.phone import normalize_uzbek_phone
+
 class User(AbstractUser):
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('oshpaz', 'Oshpaz'),
         ('kassir', 'Kassir'),
         ('afitsant', 'Afitsant'),
+        ('farrosh', 'Farrosh'),
+        ('moykachi', 'Moykachi'),
         ('customer', 'Customer'),
     ]
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
-    phone = models.CharField(max_length=20, blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True, unique=True)
+    salary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+
+    def clean(self):
+        super().clean()
+        try:
+            self.phone = normalize_uzbek_phone(self.phone)
+        except ValueError as exc:
+            raise ValidationError({'phone': str(exc)}) from exc
+
+    def save(self, *args, **kwargs):
+        self.phone = normalize_uzbek_phone(self.phone)
+        super().save(*args, **kwargs)
+
 
 class Customer(models.Model):
     user = models.OneToOneField(
