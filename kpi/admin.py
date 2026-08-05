@@ -31,19 +31,19 @@ class EmployeeKPIAdmin(admin.ModelAdmin):
     date_hierarchy = 'period_end'
 
     def has_module_permission(self, request):
-        return request.user.is_superuser or request.user.role == 'admin'
+        return request.user.is_superuser or getattr(request.user, 'role', None) == 'admin'
 
     def has_view_permission(self, request, obj=None):
-        return request.user.is_superuser or request.user.role == 'admin'
+        return request.user.is_superuser or getattr(request.user, 'role', None) == 'admin'
 
     def has_add_permission(self, request):
-        return request.user.is_superuser or request.user.role == 'admin'
+        return request.user.is_superuser or getattr(request.user, 'role', None) == 'admin'
 
     def has_change_permission(self, request, obj=None):
-        return request.user.is_superuser or request.user.role == 'admin'
+        return request.user.is_superuser or getattr(request.user, 'role', None) == 'admin'
 
     def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser or request.user.role == 'admin'
+        return request.user.is_superuser or getattr(request.user, 'role', None) == 'admin'
 
     def save_model(self, request, obj, form, change):
         if not obj.created_by_id:
