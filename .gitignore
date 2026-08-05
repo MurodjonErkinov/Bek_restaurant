@@ -7,5 +7,10 @@ notes.txt
 venv
 plan.txt
 API.txt
-Ds_Store
+error.log
+error.log.*
+.DS_Store
 customers_corrected.json
+backups/
+backup*.sql
+backup*.sql.gz

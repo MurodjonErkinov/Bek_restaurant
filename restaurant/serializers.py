@@ -32,10 +32,10 @@ class WaiterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'full_name']
+        fields = ['id', 'phone', 'full_name']
 
     def get_full_name(self, waiter):
-        return waiter.get_full_name() or waiter.username
+        return waiter.get_full_name() or waiter.phone
 
 
 class RestaurantTableSerializer(serializers.ModelSerializer):
@@ -127,7 +127,7 @@ class OrderSerializer(serializers.ModelSerializer):
     def get_waiter_name(self, order):
         if not order.waiter_id:
             return None
-        return order.waiter.get_full_name() or order.waiter.username
+        return order.waiter.get_full_name() or order.waiter.phone
 
     @transaction.atomic
     def create(self, validated_data):

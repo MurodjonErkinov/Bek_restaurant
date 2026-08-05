@@ -1,70 +1,113 @@
 from datetime import timedelta
 from decimal import Decimal
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from restaurant.models import Order, RestaurantTable
 
+class EmployeeKPI(models.Model):
+    SALES_PERCENT = 'sales_percent'
+    EXPERIENCE_PERCENT = 'experience_percent'
+    SALARY_PERCENT = 'salary_percent'
+    KPI_TYPE_CHOICES = [
+        (SALES_PERCENT, 'Yopilgan buyurtmalar summasidan 5%'),
+        (EXPERIENCE_PERCENT, 'Bir yildan ortiq staj uchun 5%'),
+        (SALARY_PERCENT, 'Oylikdan istalgan foiz'),
+    ]
+    FIXED_PERCENT = Decimal('5.00')
 
-class WaiterKPI(models.Model):
-    BASE_RATE = Decimal('5.00')
-    EXPERIENCE_BONUS_RATE = Decimal('5.00')
-    ONE_YEAR = timedelta(days=365)
-    waiter = models.ForeignKey(
+    employee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        related_name='kpi_records',
+        related_name='employee_kpis',
         on_delete=models.PROTECT,
-        limit_choices_to={'role': 'afitsant'},)
-    order = models.OneToOneField(Order, related_name='waiter_kpi', on_delete=models.PROTECT)
-    table = models.ForeignKey(
-        RestaurantTable,
-        related_name='kpi_records',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        limit_choices_to={
+            'role__in': [
+                'admin',
+                'oshpaz',
+                'kassir',
+                'afitsant',
+                'farrosh',
+                'moykachi',
+            ],
+        },
     )
-    business_date = models.DateField(db_index=True)
-    sales_amount = models.DecimalField(max_digits=12, decimal_places=2)
-    base_rate = models.DecimalField(max_digits=5, decimal_places=2, default=BASE_RATE)
-    experience_bonus_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.00'))
-    total_rate = models.DecimalField(max_digits=5, decimal_places=2)
-    commission_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    kpi_type = models.CharField(max_length=30, choices=KPI_TYPE_CHOICES)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=FIXED_PERCENT,
+    )
+    base_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+    )
+    kpi_amount = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        editable=False,
+    )
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name='created_employee_kpis',
+        on_delete=models.PROTECT,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['-period_end', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'kpi_type', 'period_start', 'period_end'],
+                name='unique_employee_kpi_period',
+            ),
+        ]
 
-    @classmethod
-    def rates_for(cls, waiter, on_date):
-        joined_date = timezone.localdate(waiter.date_joined)
-        has_experience_bonus = joined_date + cls.ONE_YEAR <= on_date
-        bonus_rate = cls.EXPERIENCE_BONUS_RATE if has_experience_bonus else Decimal('0.00')
-        return cls.BASE_RATE, bonus_rate, cls.BASE_RATE + bonus_rate
+    def clean(self):
+        super().clean()
+        if self.employee.role == 'customer':
+            raise ValidationError({'employee': 'Customer uchun KPI qo‘shib bo‘lmaydi.'})
+        if self.period_start > self.period_end:
+            raise ValidationError({'period_end': 'Davr tugashi boshlanishidan oldin bo‘la olmaydi.'})
+        if (
+            self.employee.role in {'farrosh', 'moykachi'}
+            and self.kpi_type != self.SALARY_PERCENT
+        ):
+            raise ValidationError(
+                {'kpi_type': 'Farrosh va moykachiga faqat oylikdan KPI qo‘shiladi.'}
+            )
+        if self.kpi_type in {self.SALES_PERCENT, self.EXPERIENCE_PERCENT}:
+            if self.kpi_type == self.EXPERIENCE_PERCENT:
+                joined_date = timezone.localdate(self.employee.date_joined)
+                if joined_date + timedelta(days=365) > self.period_end:
+                    raise ValidationError(
+                        {'employee': 'Xodimning staji hali bir yildan oshmagan.'}
+                    )
+            self.percentage = self.FIXED_PERCENT
+            if self.base_amount <= 0:
+                raise ValidationError(
+                    {'base_amount': 'Hisoblash uchun asosiy summa kiritilishi kerak.'}
+                )
+        elif self.kpi_type == self.SALARY_PERCENT:
+            if self.percentage <= 0 or self.percentage > 100:
+                raise ValidationError(
+                    {'percentage': 'Foiz 0 dan katta va 100 dan oshmasligi kerak.'}
+                )
+            if self.employee.salary <= 0:
+                raise ValidationError({'employee': 'Xodimning oyligi kiritilmagan.'})
+            self.base_amount = self.employee.salary
+        self.kpi_amount = (
+            self.base_amount * self.percentage / Decimal('100')
+        ).quantize(Decimal('0.01'))
 
-    @classmethod
-    def create_for_order(cls, order):
-        if order.status != 'closed':
-            return None
-        if not order.waiter_id or order.waiter.role != 'afitsant':
-            raise ValueError('Yopilgan buyurtmaga afitsant biriktirilishi shart.')
-        if not order.table_id:
-            raise ValueError('Yopilgan buyurtmaga stol biriktirilishi shart.')
-
-        business_datetime = order.closed_at or order.created_at
-        business_date = timezone.localdate(business_datetime)
-        base_rate, bonus_rate, total_rate = cls.rates_for(order.waiter, business_date)
-        commission_amount = (order.total_price * total_rate / Decimal('100')).quantize(Decimal('0.01'))
-
-        kpi, _ = cls.objects.update_or_create(
-            order=order,
-            defaults={
-                'waiter': order.waiter,
-                'table': order.table,
-                'business_date': business_date,
-                'sales_amount': order.total_price,
-                'base_rate': base_rate,
-                'experience_bonus_rate': bonus_rate,
-                'total_rate': total_rate,
-                'commission_amount': commission_amount,
-            },
-        )
-        return kpi
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

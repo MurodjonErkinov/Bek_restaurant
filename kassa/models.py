@@ -24,6 +24,15 @@ class CashSession(models.Model):
     closed_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cashier'],
+                condition=models.Q(status='open'),
+                name='unique_open_cash_session_per_cashier',
+            ),
+        ]
+
     def report(self):
         transaction_totals = self.transactions.aggregate(
             cash_income=Sum('cash_amount'),

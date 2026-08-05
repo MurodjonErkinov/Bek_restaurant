@@ -15,9 +15,17 @@ class CashSessionSerializer(serializers.ModelSerializer):
     def validate_cashier(self, cashier):
         if cashier.role != 'kassir':
             raise serializers.ValidationError('Faqat kassir uchun kassa ochish mumkin.')
-        if CashSession.objects.filter(cashier=cashier, status='open').exists():
+        open_sessions = CashSession.objects.filter(cashier=cashier, status='open')
+        if self.instance:
+            open_sessions = open_sessions.exclude(pk=self.instance.pk)
+        if open_sessions.exists():
             raise serializers.ValidationError('Bu kassirda ochiq kassa smenasi bor.')
         return cashier
+
+    def validate_opening_balance(self, value):
+        if value < 0:
+            raise serializers.ValidationError('opening_balance manfiy bo‘la olmaydi.')
+        return value
 
 
 class CashExpenseSerializer(serializers.ModelSerializer):
@@ -30,6 +38,11 @@ class CashExpenseSerializer(serializers.ModelSerializer):
         if session.status != 'open':
             raise serializers.ValidationError('Yopilgan kassaga chiqim qo‘shib bo‘lmaydi.')
         return session
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('amount 0 dan katta bo‘lishi kerak.')
+        return value
 
 
 class CashTransactionSerializer(serializers.ModelSerializer):

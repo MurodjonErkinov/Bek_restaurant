@@ -18,5 +18,3 @@ class CashTransactionAdmin(admin.ModelAdmin):
 @admin.register(CashExpense)
 class CashExpenseAdmin(admin.ModelAdmin):
     list_display = ('cash_session', 'amount', 'description', 'created_at')
-
-# Register your models here.
