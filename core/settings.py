@@ -53,6 +53,9 @@ INSTALLED_APPS = [
     'restaurant',
     'kpi',
     'kassa',
+    'delivery',
+    'partners',
+    'statistics',
 ]
 
 MIDDLEWARE = [

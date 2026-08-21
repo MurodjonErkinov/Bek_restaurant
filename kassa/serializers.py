@@ -48,5 +48,8 @@ class CashExpenseSerializer(serializers.ModelSerializer):
 class CashTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = CashTransaction
-        fields = ['id', 'cash_session', 'order', 'order_total', 'cash_amount', 'credit_amount', 'created_at']
+        fields = [
+            'id', 'cash_session', 'order', 'delivery_order', 'order_total', 'cash_amount',
+            'card_amount', 'credit_amount', 'partner_amount', 'created_at',
+        ]
         read_only_fields = fields

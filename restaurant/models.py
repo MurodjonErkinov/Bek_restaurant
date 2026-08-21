@@ -13,6 +13,7 @@ class User(AbstractUser):
         ('afitsant', 'Afitsant'),
         ('farrosh', 'Farrosh'),
         ('moykachi', 'Moykachi'),
+        ('kuryer', 'Kuryer'),
         ('customer', 'Customer'),
     ]
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
@@ -58,13 +59,14 @@ class RestaurantTable(models.Model):
 class Order(models.Model):
     STATUS_CHOICES = [
         ('new', 'Yangi'),
-        ('cooking', 'Tayyorlanmoqda'),
-        ('ready', 'Tayyor'),
         ('closed', 'Yopilgan'),
     ]
     PAYMENT_CHOICES = [
         ('cash', 'Naqd'),
+        ('card', 'Karta'),
         ('credit', 'Qarz'),
+        ('mixed', 'Aralash'),
+        ('partner_offset', 'Hamkor bilan o‘zaro hisob'),
     ]
     customer = models.ForeignKey(Customer, related_name='orders', on_delete=models.CASCADE)
     waiter = models.ForeignKey(

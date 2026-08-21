@@ -9,8 +9,10 @@ plan.txt
 API.txt
 error.log
 error.log.*
+docker-compose.override.yml
 .DS_Store
 customers_corrected.json
 backups/
 backup*.sql
 backup*.sql.gz
+backup*.sql.zip

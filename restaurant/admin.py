@@ -6,7 +6,7 @@ from .models import Category, Customer, Order, OrderItem, Product, RestaurantTab
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'phone', 'role', 'salary', 'is_staff', 'is_active')
+    list_display = ('id', 'username', 'phone', 'role', 'salary', 'is_staff', 'is_active')
     search_fields = ('username', 'phone', 'email')
     fieldsets = BaseUserAdmin.fieldsets + (
         ('Additional info', {'fields': ('role', 'phone', 'salary')}),

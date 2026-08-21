@@ -1,7 +1,7 @@
 from rest_framework.permissions import BasePermission
 
 
-EMPLOYEE_ROLES = {'admin', 'kassir', 'afitsant', 'oshpaz'}
+EMPLOYEE_ROLES = {'admin', 'kassir', 'afitsant', 'kuryer'}
 
 
 def has_role(user, roles):
@@ -31,8 +31,3 @@ class IsAdminOrCashier(BasePermission):
 class IsAdminOrCashierOrWaiter(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, {'admin', 'kassir', 'afitsant'})
-
-
-class IsAdminOrChef(BasePermission):
-    def has_permission(self, request, view):
-        return has_role(request.user, {'admin', 'oshpaz'})

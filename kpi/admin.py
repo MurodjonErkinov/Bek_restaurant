@@ -10,12 +10,13 @@ class EmployeeKPIAdmin(admin.ModelAdmin):
         'kpi_type',
         'period_start',
         'period_end',
+        'reward_date',
         'percentage',
         'base_amount',
         'kpi_amount',
         'created_by',
     )
-    list_filter = ('kpi_type', 'period_start', 'period_end')
+    list_filter = ('kpi_type', 'period_start', 'period_end', 'reward_date')
     search_fields = (
         'employee__username',
         'employee__phone',

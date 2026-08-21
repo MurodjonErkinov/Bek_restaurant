@@ -11,8 +11,8 @@ class CashSessionAdmin(admin.ModelAdmin):
 
 @admin.register(CashTransaction)
 class CashTransactionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cash_session', 'order', 'order_total', 'cash_amount', 'credit_amount', 'created_at')
-    readonly_fields = ('cash_session', 'order', 'order_total', 'cash_amount', 'credit_amount', 'created_at')
+    list_display = ('id', 'cash_session', 'order', 'delivery_order', 'order_total', 'cash_amount', 'card_amount', 'credit_amount', 'partner_amount', 'created_at')
+    readonly_fields = ('cash_session', 'order', 'delivery_order', 'order_total', 'cash_amount', 'card_amount', 'credit_amount', 'partner_amount', 'created_at')
 
 
 @admin.register(CashExpense)

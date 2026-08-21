@@ -1,4 +1,3 @@
-from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -9,13 +8,14 @@ from rest_framework.response import Response
 from authentication.permissions import (
     IsAdminOrCashier,
     IsAdminOrCashierOrWaiter,
-    IsAdminOrChef,
     IsAdminRole,
     IsEmployee,
 )
 from kassa.models import CashSession, CashTransaction
 from kassa.notifications import send_checkout_notification
+from kassa.payments import parse_payment
 from kassa.serializers import CashTransactionSerializer
+from partners.models import Partner, PartnerTransaction
 
 from .models import Category, Customer, Order, Product, RestaurantTable, User
 from .serializers import (
@@ -50,7 +50,7 @@ class WaiterViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = (
         User.objects
         .filter(role='afitsant', is_active=True)
-        .exclude(waiter_orders__status__in=['new', 'cooking', 'ready'])
+        .exclude(waiter_orders__status='new')
         .order_by('id')
     )
     serializer_class = WaiterSerializer
@@ -74,8 +74,8 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         permission_classes = {
             'create': [IsAdminOrCashierOrWaiter],
-            'update': [IsAdminOrChef],
-            'partial_update': [IsAdminOrChef],
+            'update': [IsAdminRole],
+            'partial_update': [IsAdminRole],
             'destroy': [IsAdminRole],
             'checkout': [IsAdminOrCashier],
         }.get(self.action, [IsEmployee])
@@ -99,16 +99,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         ):
             raise PermissionDenied('Afitsant buyurtmani faqat new statusida ochishi mumkin.')
         serializer.save()
-
-    def update(self, request, *args, **kwargs):
-        if request.user.role == 'oshpaz' and not request.user.is_superuser:
-            if not kwargs.get('partial'):
-                raise PermissionDenied('Oshpaz faqat PATCH orqali statusni o‘zgartira oladi.')
-            if set(request.data) != {'status'}:
-                raise PermissionDenied('Oshpaz faqat status maydonini o‘zgartira oladi.')
-            if request.data.get('status') not in {'cooking', 'ready'}:
-                raise PermissionDenied('Oshpaz faqat cooking yoki ready statusini qo‘ya oladi.')
-        return super().update(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='checkout')
     def checkout(self, request, pk=None):
@@ -135,26 +125,30 @@ class OrderViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            payment_type = request.data.get('payment_type', 'cash')
             try:
-                paid_amount = Decimal(str(request.data.get('paid_amount', '0')))
-            except (InvalidOperation, TypeError, ValueError):
-                return Response({'detail': 'paid_amount noto‘g‘ri.'}, status=status.HTTP_400_BAD_REQUEST)
+                payment = parse_payment(request.data, order.total_price)
+            except ValueError as exc:
+                return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-            if payment_type not in dict(Order.PAYMENT_CHOICES):
-                return Response({'detail': 'payment_type noto‘g‘ri.'}, status=status.HTTP_400_BAD_REQUEST)
-            if not paid_amount.is_finite() or paid_amount < 0:
-                return Response({'detail': 'paid_amount manfiy bo‘la olmaydi.'}, status=status.HTTP_400_BAD_REQUEST)
-            if paid_amount > order.total_price:
-                return Response(
-                    {'detail': 'paid_amount buyurtma summasidan oshmasligi kerak.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            if payment_type == 'cash' and paid_amount < order.total_price:
-                return Response(
-                    {'detail': 'Qisman to‘lov uchun payment_type=credit yuboring.'},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            partner = None
+            if payment['partner_amount'] > 0:
+                partner_id = request.data.get('partner')
+                if not partner_id:
+                    return Response(
+                        {'detail': 'partner_amount yuborilganda partner ID majburiy.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                partner = Partner.objects.select_for_update().filter(
+                    pk=partner_id,
+                    is_active=True,
+                ).first()
+                if partner is None:
+                    return Response({'detail': 'Faol hamkor topilmadi.'}, status=status.HTTP_400_BAD_REQUEST)
+                if payment['partner_amount'] > partner.balance:
+                    return Response(
+                        {'detail': 'partner_amount hamkor oldidagi mavjud qarzdan oshmasligi kerak.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
             session_id = request.data.get('cash_session')
             sessions = CashSession.objects.select_for_update().filter(status='open')
@@ -181,10 +175,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-            order.payment_type = payment_type
-            order.paid_amount = paid_amount
-            order.debt_amount = max(order.total_price - paid_amount, Decimal('0.00'))
-            order.is_paid = paid_amount >= order.total_price
+            order.payment_type = payment['payment_type']
+            order.paid_amount = payment['paid_amount']
+            order.debt_amount = payment['debt_amount']
+            order.is_paid = payment['is_paid']
             order.status = 'closed'
             order.closed_at = timezone.now()
             order.save(update_fields=[
@@ -195,9 +189,20 @@ class OrderViewSet(viewsets.ModelViewSet):
                 cash_session=cash_session,
                 order=order,
                 order_total=order.total_price,
-                cash_amount=paid_amount,
-                credit_amount=order.debt_amount,
+                cash_amount=payment['cash_amount'],
+                card_amount=payment['card_amount'],
+                credit_amount=payment['credit_amount'],
+                partner_amount=payment['partner_amount'],
             )
+            if partner:
+                PartnerTransaction.objects.create(
+                    partner=partner,
+                    transaction_type=PartnerTransaction.ORDER_OFFSET,
+                    amount=payment['partner_amount'],
+                    order=order,
+                    description=f'Order #{order.id} bilan o‘zaro hisob',
+                    created_by=request.user,
+                )
 
         telegram_notification = send_checkout_notification(order)
         response_data = OrderSerializer(order).data

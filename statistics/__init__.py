@@ -1,0 +1,2 @@
+from .apps import StatisticsConfig
+

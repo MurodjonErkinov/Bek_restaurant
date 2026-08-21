@@ -36,12 +36,16 @@ class CashSession(models.Model):
     def report(self):
         transaction_totals = self.transactions.aggregate(
             cash_income=Sum('cash_amount'),
+            card_income=Sum('card_amount'),
             credit_sales=Sum('credit_amount'),
+            partner_offset=Sum('partner_amount'),
             sales_total=Sum('order_total'),
         )
         expenses_total = self.expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         cash_income = transaction_totals['cash_income'] or Decimal('0.00')
+        card_income = transaction_totals['card_income'] or Decimal('0.00')
         credit_sales = transaction_totals['credit_sales'] or Decimal('0.00')
+        partner_offset = transaction_totals['partner_offset'] or Decimal('0.00')
         sales_total = transaction_totals['sales_total'] or Decimal('0.00')
         expected_balance = self.opening_balance + cash_income - expenses_total
         difference = None
@@ -58,7 +62,9 @@ class CashSession(models.Model):
             'orders_count': self.transactions.count(),
             'sales_total': sales_total,
             'cash_income': cash_income,
+            'card_income': card_income,
             'credit_sales': credit_sales,
+            'partner_offset': partner_offset,
             'expenses_total': expenses_total,
             'expected_balance': expected_balance,
             'closing_balance': self.closing_balance,
@@ -68,11 +74,37 @@ class CashSession(models.Model):
 
 class CashTransaction(models.Model):
     cash_session = models.ForeignKey(CashSession, related_name='transactions', on_delete=models.PROTECT)
-    order = models.OneToOneField(Order, related_name='cash_transaction', on_delete=models.PROTECT)
+    order = models.OneToOneField(
+        Order,
+        related_name='cash_transaction',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    delivery_order = models.OneToOneField(
+        'delivery.DeliveryOrder',
+        related_name='cash_transaction',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
     order_total = models.DecimalField(max_digits=12, decimal_places=2)
     cash_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    card_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     credit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    partner_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(order__isnull=False, delivery_order__isnull=True)
+                    | models.Q(order__isnull=True, delivery_order__isnull=False)
+                ),
+                name='cash_transaction_has_one_order_source',
+            ),
+        ]
 
 
 class CashExpense(models.Model):
